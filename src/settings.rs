@@ -5,7 +5,11 @@
 
 use crate::config::Config;
 use crate::i18n;
+use crate::modules;
 use crate::units::{Mode, ALL as UNITS, MODES};
+
+/// Uyarı eşiği seçenekleri; 0 kapalı demek.
+const THRESHOLDS: [u8; 6] = [0, 50, 60, 70, 80, 90];
 
 fn esc(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -36,11 +40,55 @@ fn row(label: &str, control: String) -> String {
     )
 }
 
+/// Bölüm başlığı: ayarları görsel olarak gruplar.
+fn section(title: &str) -> String {
+    format!(r#"<div class="sec">{}</div>"#, esc(title))
+}
+
+fn checkbox(field: &str, checked: bool) -> String {
+    format!(
+        r#"<input type="checkbox" data-field="{field}"{}>"#,
+        if checked { " checked" } else { "" }
+    )
+}
+
+/// Eşik seçici; kapalı seçeneği listenin başında durur.
+fn threshold(field: &str, current: u8) -> String {
+    let items: Vec<(String, String)> = THRESHOLDS
+        .iter()
+        .map(|v| {
+            (
+                v.to_string(),
+                if *v == 0 {
+                    i18n::t("settings.alert_off")
+                } else {
+                    format!("{v}%")
+                },
+            )
+        })
+        .collect();
+    select(field, &items, &current.to_string())
+}
+
 fn select(field: &str, items: &[(String, String)], sel: &str) -> String {
     format!(
         r#"<select data-field="{field}">{}</select>"#,
         options(items, sel)
     )
+}
+
+/// Menü çubuğunda hangi modülün görüneceğini seçen satırlar.
+fn module_rows(cfg: &Config) -> String {
+    std::iter::once("network")
+        .chain(modules::IDS)
+        .chain(std::iter::once(modules::CLOCK_ID))
+        .map(|id| {
+            row(
+                &i18n::t(&format!("module.{id}")),
+                checkbox(&format!("mod.{id}"), cfg.modules.iter().any(|m| m == id)),
+            )
+        })
+        .collect()
 }
 
 /// `ifaces`: (id, etiket) — grafik penceresiyle aynı liste.
@@ -85,13 +133,22 @@ pub fn html(cfg: &Config, ifaces: &[(String, String)]) -> String {
             &i18n::t("settings.max_unit"),
             select("max", &units(cfg.unit_mode), cfg.max_unit.key()),
         ),
+        row(&i18n::t("settings.autostart"), checkbox("autostart", cfg.autostart)),
+        section(&i18n::t("settings.modules")),
+        module_rows(cfg),
+        section(&i18n::t("settings.timezones")),
         row(
-            &i18n::t("settings.autostart"),
+            &i18n::t("settings.timezones"),
             format!(
-                r#"<input type="checkbox" data-field="autostart"{}>"#,
-                if cfg.autostart { " checked" } else { "" }
+                r#"<input type="text" data-field="timezones" value="{}" placeholder="{}">"#,
+                esc(&cfg.timezones.join(", ")),
+                esc(&i18n::t("settings.timezones_hint"))
             ),
         ),
+        section(&i18n::t("settings.alerts")),
+        row(&i18n::t("settings.alert_cpu"), threshold("alert_cpu", cfg.alert_cpu)),
+        row(&i18n::t("settings.alert_mem"), threshold("alert_mem", cfg.alert_mem)),
+        row(&i18n::t("settings.alert_disk"), threshold("alert_disk", cfg.alert_disk)),
     ]
     .concat();
 
@@ -114,6 +171,10 @@ body {{ margin:0; padding:18px 20px; background:var(--bg); color:var(--fg);
 select {{ font:inherit; width:100%; max-width:280px; padding:5px 8px; border-radius:6px;
   border:1px solid var(--line); background:var(--card); color:var(--fg); }}
 input[type=checkbox] {{ width:16px; height:16px; accent-color:#2f6df6; }}
+.sec {{ margin:16px 0 2px; font-size:11px; font-weight:600; text-transform:none;
+  color:var(--fg); opacity:.55; letter-spacing:.02em; }}
+input[type=text] {{ font:inherit; width:100%; max-width:280px; padding:5px 8px;
+  border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); }}
 .note {{ margin-top:14px; color:var(--muted); font-size:11.5px; }}
 </style></head><body>
 {body}

@@ -1,11 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod alerts;
 mod chart;
 mod config;
 mod i18n;
 #[cfg(not(target_os = "macos"))]
 mod icon;
 mod ifaces;
+mod modules;
 mod settings;
 mod stats;
 mod units;
@@ -13,8 +15,10 @@ mod units;
 use std::net::TcpListener;
 use std::time::{Duration, Instant};
 
+use alerts::Alerts;
 use auto_launch::AutoLaunchBuilder;
 use config::Config;
+use modules::Module;
 use i18n::{t, t1, tn};
 use stats::{Bucket, Metric, Range, Stats};
 use sysinfo::Networks;
@@ -25,7 +29,7 @@ use tao::window::{Window, WindowBuilder};
 use wry::{WebView, WebViewBuilder};
 #[cfg(target_os = "macos")]
 use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS, EventLoopWindowTargetExtMacOS};
-use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{TrayIcon, TrayIconBuilder};
 
 const TICK: Duration = Duration::from_secs(1);
@@ -55,6 +59,77 @@ impl Default for ChartState {
             bucket: Range::Last24h.default_bucket(),
             metric: Metric::Both,
             iface: None,
+        }
+    }
+}
+
+/// Menü çubuğundaki bir modül: kendi öğesi, kendi açılır menüsü.
+/// Bilgi satırları kurulumda oluşturulur, sonra yalnızca metinleri güncellenir.
+struct ModuleTray {
+    module: Box<dyn Module>,
+    tray: TrayIcon,
+    rows: Vec<MenuItem>,
+    ticks: u32,
+}
+
+/// Her modülün menüsünde Ayarlar ve Çıkış kendi kopyasıyla bulunur;
+/// kimlikleri olay eşleştirmesi için toplanır.
+struct CommonIds {
+    settings: Vec<MenuId>,
+    quit: Vec<MenuId>,
+}
+
+impl CommonIds {
+    fn is_settings(&self, id: &MenuId) -> bool {
+        self.settings.contains(id)
+    }
+    fn is_quit(&self, id: &MenuId) -> bool {
+        self.quit.contains(id)
+    }
+}
+
+/// Modül için menü çubuğu öğesi kurar; başarısız olursa modül atlanır.
+fn build_module_tray(module: Box<dyn Module>, ids: &mut CommonIds) -> Option<ModuleTray> {
+    let menu = Menu::new();
+    let rows: Vec<MenuItem> = (0..module.rows())
+        .map(|_| MenuItem::new(modules::dash(), false, None))
+        .collect();
+    for r in &rows {
+        menu.append(r).ok()?;
+    }
+    menu.append(&PredefinedMenuItem::separator()).ok()?;
+
+    let settings = MenuItem::new(t("menu.settings"), true, None);
+    let quit = MenuItem::new(t("menu.quit"), true, None);
+    menu.append(&settings).ok()?;
+    menu.append(&quit).ok()?;
+    ids.settings.push(settings.id().clone());
+    ids.quit.push(quit.id().clone());
+
+    let tray = TrayIconBuilder::new()
+        .with_menu(Box::new(menu))
+        .with_title(t(&format!("module.{}", module.id())))
+        .with_tooltip(t(&format!("module.{}", module.id())))
+        .build()
+        .ok()?;
+
+    Some(ModuleTray { module, tray, rows, ticks: 0 })
+}
+
+/// Modül öğelerini ayarlara göre baştan kurar.
+/// Tek tek ekleyip çıkarmak yerine hepsini yenilemek menü çubuğundaki
+/// soldan sağa sırayı korumanın en basit yolu.
+fn rebuild_modules(mods: &mut Vec<ModuleTray>, ids: &mut CommonIds, cfg: &Config) {
+    mods.clear();
+    // İlk kayıtlar ağ menüsüne ait, onlar kalır.
+    ids.settings.truncate(1);
+    ids.quit.truncate(1);
+    for id in modules::IDS.iter().chain(std::iter::once(&modules::CLOCK_ID)) {
+        if !cfg.modules.iter().any(|m| m == id) {
+            continue;
+        }
+        if let Some(m) = modules::make(id).and_then(|m| build_module_tray(m, ids)) {
+            mods.push(m);
         }
     }
 }
@@ -179,6 +254,12 @@ fn main() {
     let ipc_proxy = event_loop.create_proxy();
 
     let mut tray: Option<TrayIcon> = None;
+    let mut mods: Vec<ModuleTray> = Vec::new();
+    let mut common = CommonIds {
+        settings: vec![settings_item.id().clone()],
+        quit: vec![quit_item.id().clone()],
+    };
+    let mut alerts = Alerts::default();
     let mut next_tick = Instant::now() + TICK;
 
     let mut chart: Option<WinView> = None;
@@ -217,10 +298,15 @@ fn main() {
                 #[cfg(not(target_os = "macos"))]
                 let builder = builder.with_icon(icon::build());
 
-                match builder.build() {
-                    Ok(t) => tray = Some(t),
-                    Err(e) => eprintln!("{}", t1("error.tray", &e.to_string())),
+                if cfg.modules.iter().any(|m| m == "network") {
+                    match builder.build() {
+                        Ok(t) => tray = Some(t),
+                        Err(e) => eprintln!("{}", t1("error.tray", &e.to_string())),
+                    }
                 }
+
+                // Menü çubuğu sırası: ağ, diğer modüller, en sağda saat.
+                rebuild_modules(&mut mods, &mut common, &cfg);
             }
 
             Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
@@ -289,6 +375,27 @@ fn main() {
                     }
                 }
 
+                for mt in mods.iter_mut() {
+                    mt.ticks += 1;
+                    if mt.ticks % mt.module.period() != 1 && mt.module.period() != 1 {
+                        continue;
+                    }
+                    let out = mt.module.read(&cfg);
+                    let _ = mt.tray.set_title(Some(&out.title));
+                    for (item, text) in mt.rows.iter().zip(out.rows.iter()) {
+                        item.set_text(text);
+                    }
+                    if let Some(level) = out.level {
+                        let (threshold, key) = match mt.module.id() {
+                            "cpu" => (cfg.alert_cpu, "alert.cpu"),
+                            "memory" => (cfg.alert_mem, "alert.mem"),
+                            "disk" => (cfg.alert_disk, "alert.disk"),
+                            _ => (0, ""),
+                        };
+                        alerts.check(mt.module.id(), key, threshold, level, out.label.as_deref());
+                    }
+                }
+
                 if let Some(db) = &db {
                     let sel = cfg.iface.as_deref();
                     let (d, m, p) = (db.today(sel), db.month(sel), db.peak_today(sel));
@@ -345,7 +452,7 @@ fn main() {
                     return;
                 }
 
-                if ev.id == *settings_item.id() {
+                if common.is_settings(&ev.id) {
                     if let Some(o) = &opts {
                         o.window.set_focus();
                     } else if let Ok(w) = WindowBuilder::new()
@@ -373,7 +480,7 @@ fn main() {
                     return;
                 }
 
-                if ev.id == *quit_item.id() {
+                if common.is_quit(&ev.id) {
                     *control_flow = ControlFlow::Exit;
                 }
             }
@@ -419,6 +526,45 @@ fn main() {
                                 }
                             }
                         }
+                        "timezones" => {
+                            cfg.timezones = key
+                                .split(',')
+                                .map(str::trim)
+                                .filter(|s| !s.is_empty())
+                                .map(str::to_string)
+                                .collect();
+                        }
+                        "alert_cpu" | "alert_mem" | "alert_disk" => {
+                            let Ok(v) = key.parse::<u8>() else { return };
+                            match field {
+                                "alert_cpu" => cfg.alert_cpu = v,
+                                "alert_mem" => cfg.alert_mem = v,
+                                _ => cfg.alert_disk = v,
+                            }
+                        }
+                        // "mod.cpu" gibi: modülün menü çubuğunda görünürlüğü
+                        f if f.starts_with("mod.") => {
+                            let id = f.trim_start_matches("mod.").to_string();
+                            let on = key == "1";
+                            cfg.modules.retain(|m| *m != id);
+                            if on {
+                                cfg.modules.push(id.clone());
+                            }
+                            if id == "network" {
+                                if on && tray.is_none() {
+                                    let b = TrayIconBuilder::new()
+                                        .with_menu(Box::new(menu.clone()))
+                                        .with_tooltip(t("app.name"));
+                                    #[cfg(not(target_os = "macos"))]
+                                    let b = b.with_icon(icon::build());
+                                    tray = b.build().ok();
+                                } else if !on {
+                                    tray = None;
+                                }
+                            } else {
+                                rebuild_modules(&mut mods, &mut common, &cfg);
+                            }
+                        }
                         "autostart" => {
                             cfg.autostart = key == "1";
                             if let Some(al) = &al {
@@ -444,6 +590,8 @@ fn main() {
                         if let Some(o) = &opts {
                             o.window.set_title(&t("window.settings"));
                         }
+                        // Modül menülerindeki etiketler kurulumda yazıldı: baştan kur.
+                        rebuild_modules(&mut mods, &mut common, &cfg);
                     }
 
                     // Seçim listeleri ve etiketler ayarla birlikte değişir: yeniden çiz.

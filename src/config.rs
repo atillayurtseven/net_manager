@@ -18,11 +18,28 @@ pub struct Config {
     /// Arayüz dili kodu; tanınmıyorsa varsayılana düşer
     #[serde(default = "default_lang")]
     pub lang: String,
+    /// Menü çubuğunda gösterilecek modül kimlikleri
+    #[serde(default = "default_modules")]
+    pub modules: Vec<String>,
+    /// Saat modülündeki dünya saatleri ("Europe/Istanbul")
+    #[serde(default)]
+    pub timezones: Vec<String>,
+    /// Uyarı eşikleri, yüzde; 0 = kapalı
+    #[serde(default)]
+    pub alert_cpu: u8,
+    #[serde(default)]
+    pub alert_mem: u8,
+    #[serde(default)]
+    pub alert_disk: u8,
 }
 
 fn default_min() -> Unit { Unit::KB }
 fn default_max() -> Unit { Unit::GB }
 fn default_lang() -> String { crate::i18n::DEFAULT.to_string() }
+/// Açılışta menü çubuğunu doldurmamak için yalnızca üç modül açık gelir.
+fn default_modules() -> Vec<String> {
+    ["network", "cpu", "memory"].iter().map(|s| s.to_string()).collect()
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -33,6 +50,11 @@ impl Default for Config {
             max_unit: default_max(),
             unit_mode: Mode::default(),
             lang: default_lang(),
+            modules: default_modules(),
+            timezones: Vec::new(),
+            alert_cpu: 0,
+            alert_mem: 0,
+            alert_disk: 0,
         }
     }
 }
