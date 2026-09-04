@@ -1,0 +1,60 @@
+{
+  "app.name": "Net Manager",
+
+  "menu.stats": "İstatistikler",
+  "menu.options": "Seçenekler…",
+  "menu.quit": "Çıkış",
+
+  "stats.today": "Bugün",
+  "stats.month": "Bu ay",
+  "stats.peak_today": "Zirve (bugün)",
+  "stats.chart": "Trafik grafiği…",
+  "stats.empty": "—",
+
+  "window.chart": "Net Manager — Trafik",
+  "window.options": "Net Manager — Seçenekler",
+
+  "options.language": "Dil",
+  "options.language_system": "Sistem dili",
+  "options.interface": "Ağ arayüzü",
+  "options.interface_all": "Tümü",
+  "options.unit_system": "Birim sistemi",
+  "options.min_unit": "En küçük birim",
+  "options.max_unit": "En büyük birim",
+  "options.autostart": "Açılışta otomatik başlat",
+  "options.restart_note": "Dil değişikliği bundan sonra açılan pencerelerde geçerlidir.",
+
+  "unit.byte": "Bayt (KB/s, MB/s…)",
+  "unit.bit": "Bit (Kbps, Mbps…)",
+
+  "chart.range": "Aralık",
+  "chart.bucket": "Kırılım",
+  "chart.metric": "Gösterim",
+  "chart.iface": "Arayüz",
+  "chart.all": "Tümü",
+  "chart.download": "İndirme",
+  "chart.upload": "Yükleme",
+  "chart.total": "Toplam",
+  "chart.by_iface": "Ağ arayüzüne göre — {}",
+  "chart.col_iface": "Arayüz",
+  "chart.week_of": "{} haftası",
+
+  "bucket.hour": "Saatlik",
+  "bucket.day": "Günlük",
+  "bucket.week": "Haftalık",
+  "bucket.month": "Aylık",
+
+  "range.24h": "Son 24 saat",
+  "range.30d": "Son 30 gün",
+  "range.60d": "Son 60 gün",
+  "range.90d": "Son 90 gün",
+  "range.this_month": "Bu ay",
+  "range.last_month": "Geçen ay",
+  "range.3m": "Son 3 ay",
+  "range.all": "Tümü",
+
+  "metric.both": "İndirme + Yükleme",
+  "metric.dl": "İndirme",
+  "metric.ul": "Yükleme",
+  "metric.total": "Toplam"
+}

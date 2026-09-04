@@ -1,0 +1,60 @@
+{
+  "app.name": "Net Manager",
+
+  "menu.stats": "Statistics",
+  "menu.options": "Options…",
+  "menu.quit": "Quit",
+
+  "stats.today": "Today",
+  "stats.month": "This month",
+  "stats.peak_today": "Peak (today)",
+  "stats.chart": "Traffic chart…",
+  "stats.empty": "—",
+
+  "window.chart": "Net Manager — Traffic",
+  "window.options": "Net Manager — Options",
+
+  "options.language": "Language",
+  "options.language_system": "System default",
+  "options.interface": "Network interface",
+  "options.interface_all": "All",
+  "options.unit_system": "Unit system",
+  "options.min_unit": "Smallest unit",
+  "options.max_unit": "Largest unit",
+  "options.autostart": "Start at login",
+  "options.restart_note": "Language changes apply to windows opened from now on.",
+
+  "unit.byte": "Bytes (KB/s, MB/s…)",
+  "unit.bit": "Bits (Kbps, Mbps…)",
+
+  "chart.range": "Range",
+  "chart.bucket": "Grouping",
+  "chart.metric": "Series",
+  "chart.iface": "Interface",
+  "chart.all": "All",
+  "chart.download": "Download",
+  "chart.upload": "Upload",
+  "chart.total": "Total",
+  "chart.by_iface": "By network interface — {}",
+  "chart.col_iface": "Interface",
+  "chart.week_of": "Week of {}",
+
+  "bucket.hour": "Hourly",
+  "bucket.day": "Daily",
+  "bucket.week": "Weekly",
+  "bucket.month": "Monthly",
+
+  "range.24h": "Last 24 hours",
+  "range.30d": "Last 30 days",
+  "range.60d": "Last 60 days",
+  "range.90d": "Last 90 days",
+  "range.this_month": "This month",
+  "range.last_month": "Last month",
+  "range.3m": "Last 3 months",
+  "range.all": "All time",
+
+  "metric.both": "Download + Upload",
+  "metric.dl": "Download",
+  "metric.ul": "Upload",
+  "metric.total": "Total"
+}
