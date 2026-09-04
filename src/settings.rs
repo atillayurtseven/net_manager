@@ -1,6 +1,6 @@
-//! Seçenekler penceresinin içeriği.
+//! Ayarlar penceresinin içeriği.
 //!
-//! Her denetim değişince `window.ipc.postMessage("opt.<alan>:<değer>")` yollar;
+//! Her denetim değişince `window.ipc.postMessage("set.<alan>:<değer>")` yollar;
 //! Rust tarafı ayarı kaydedip pencereyi yeniden çizer.
 
 use crate::config::Config;
@@ -45,19 +45,13 @@ fn select(field: &str, items: &[(String, String)], sel: &str) -> String {
 
 /// `ifaces`: (id, etiket) — grafik penceresiyle aynı liste.
 pub fn html(cfg: &Config, ifaces: &[(String, String)]) -> String {
-    let mut langs: Vec<(String, String)> = vec![(
-        "system".to_string(),
-        i18n::t("options.language_system"),
-    )];
-    langs.extend(
-        i18n::available()
-            .into_iter()
-            .map(|(code, name)| (code.to_string(), name.to_string())),
-    );
-    let lang_sel = cfg.lang.clone().unwrap_or_else(|| "system".to_string());
+    let langs: Vec<(String, String)> = i18n::available()
+        .into_iter()
+        .map(|(code, name)| (code.to_string(), name.to_string()))
+        .collect();
 
     let mut iface_items: Vec<(String, String)> =
-        vec![("*".to_string(), i18n::t("options.interface_all"))];
+        vec![("*".to_string(), i18n::t("settings.interface_all"))];
     iface_items.extend(ifaces.iter().cloned());
     let iface_sel = cfg.iface.clone().unwrap_or_else(|| "*".to_string());
 
@@ -74,25 +68,25 @@ pub fn html(cfg: &Config, ifaces: &[(String, String)]) -> String {
     };
 
     let body = [
-        row(&i18n::t("options.language"), select("lang", &langs, &lang_sel)),
+        row(&i18n::t("settings.language"), select("lang", &langs, &cfg.lang)),
         row(
-            &i18n::t("options.interface"),
+            &i18n::t("settings.interface"),
             select("iface", &iface_items, &iface_sel),
         ),
         row(
-            &i18n::t("options.unit_system"),
+            &i18n::t("settings.unit_system"),
             select("mode", &modes, cfg.unit_mode.key()),
         ),
         row(
-            &i18n::t("options.min_unit"),
+            &i18n::t("settings.min_unit"),
             select("min", &units(cfg.unit_mode), cfg.min_unit.key()),
         ),
         row(
-            &i18n::t("options.max_unit"),
+            &i18n::t("settings.max_unit"),
             select("max", &units(cfg.unit_mode), cfg.max_unit.key()),
         ),
         row(
-            &i18n::t("options.autostart"),
+            &i18n::t("settings.autostart"),
             format!(
                 r#"<input type="checkbox" data-field="autostart"{}>"#,
                 if cfg.autostart { " checked" } else { "" }
@@ -127,14 +121,14 @@ input[type=checkbox] {{ width:16px; height:16px; accent-color:#2f6df6; }}
 <script>
   function send(el) {{
     var v = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value;
-    window.ipc.postMessage('opt.' + el.dataset.field + ':' + v);
+    window.ipc.postMessage('set.' + el.dataset.field + ':' + v);
   }}
   document.querySelectorAll('[data-field]').forEach(function (el) {{
     el.addEventListener('change', function () {{ send(el); }});
   }});
 </script></body></html>"##,
         lang = i18n::active(),
-        title = esc(&i18n::t("window.options")),
-        note = esc(&i18n::t("options.restart_note")),
+        title = esc(&i18n::t("window.settings")),
+        note = esc(&i18n::t("settings.note")),
     )
 }

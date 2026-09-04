@@ -68,17 +68,10 @@ impl Unit {
         }
     }
 
-    pub fn label(self, mode: Mode) -> &'static str {
-        match (mode, self) {
-            (Mode::Byte, Unit::KB) => "KB",
-            (Mode::Byte, Unit::MB) => "MB",
-            (Mode::Byte, Unit::GB) => "GB",
-            (Mode::Byte, Unit::TB) => "TB",
-            (Mode::Bit, Unit::KB) => "Kbps",
-            (Mode::Bit, Unit::MB) => "Mbps",
-            (Mode::Bit, Unit::GB) => "Gbps",
-            (Mode::Bit, Unit::TB) => "Tbps",
-        }
+    /// Birim sembolü; bit sisteminde "bps" karşılığı kullanılır.
+    pub fn label(self, mode: Mode) -> String {
+        let suffix = if mode == Mode::Bit { "ps" } else { "" };
+        t(&format!("unit.{}{suffix}", self.key()))
     }
 
     pub fn key(self) -> &'static str {
@@ -128,6 +121,10 @@ pub fn fmt_rate(bytes_per_sec: f64, mode: Mode, min: Unit, max: Unit) -> String 
         0
     };
 
-    let suffix = if mode == Mode::Byte { "/s" } else { "" };
+    let suffix = if mode == Mode::Byte {
+        t("unit.per_second")
+    } else {
+        String::new()
+    };
     format!("{v:.decimals$} {}{suffix}", unit.label(mode))
 }

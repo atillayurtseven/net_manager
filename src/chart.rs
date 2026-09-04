@@ -58,6 +58,28 @@ fn seg(id: &str, active: bool, key: &str, label: &str) -> String {
     )
 }
 
+/// Tooltip gövdesini katalogdaki biçimden JS ifadesine çevirir:
+/// "↓ {}<br>↑ {}" -> "'↓ ' + g.dataset.dl + '<br>↑ ' + g.dataset.ul"
+fn tooltip_js() -> String {
+    let fields = ["g.dataset.dl", "g.dataset.ul", "g.dataset.tot"];
+    let mut out = String::new();
+    for (i, part) in t("chart.tooltip").split("{}").enumerate() {
+        if i > 0 {
+            if let Some(f) = fields.get(i - 1) {
+                out.push_str(&format!(" + {f}"));
+            }
+        }
+        if !part.is_empty() {
+            let lit = part.replace('\\', "\\\\").replace('\'', "\\'");
+            if i > 0 {
+                out.push_str(" + ");
+            }
+            out.push_str(&format!("'{lit}'"));
+        }
+    }
+    out
+}
+
 pub fn html(v: &View) -> String {
     let n = v.data.len().max(1) as f64;
     let plot_w = W - PAD_L - PAD_R;
@@ -277,8 +299,7 @@ td.pct span {{ display:block; height:6px; border-radius:3px; background:var(--dl
   var tip = document.getElementById('tip');
   document.querySelectorAll('.bar').forEach(function (g) {{
     g.addEventListener('mousemove', function (e) {{
-      tip.innerHTML = '<b>' + g.dataset.t + '</b><br>↓ ' + g.dataset.dl +
-                      '<br>↑ ' + g.dataset.ul + '<br>Σ ' + g.dataset.tot;
+      tip.innerHTML = '<b>' + g.dataset.t + '</b><br>' + {tooltip_js};
       tip.style.opacity = 1;
       var r = tip.getBoundingClientRect();
       var x = Math.min(e.clientX + 14, window.innerWidth - r.width - 8);
@@ -290,7 +311,8 @@ td.pct span {{ display:block; height:6px; border-radius:3px; background:var(--dl
   }});
 </script></body></html>"##,
         lang = active(),
-        title = esc(&t("chart.total")),
+        title = esc(&t("window.chart")),
+        tooltip_js = tooltip_js(),
         l_range = esc(&t("chart.range")),
         l_bucket = esc(&t("chart.bucket")),
         l_metric = esc(&t("chart.metric")),

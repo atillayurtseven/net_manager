@@ -6,7 +6,7 @@ mod i18n;
 #[cfg(not(target_os = "macos"))]
 mod icon;
 mod ifaces;
-mod options;
+mod settings;
 mod stats;
 mod units;
 
@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use auto_launch::AutoLaunchBuilder;
 use config::Config;
-use i18n::t;
+use i18n::{t, t1, tn};
 use stats::{Bucket, Metric, Range, Stats};
 use sysinfo::Networks;
 use units::{Mode, Unit};
@@ -29,12 +29,14 @@ use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{TrayIcon, TrayIconBuilder};
 
 const TICK: Duration = Duration::from_secs(1);
+/// Otomatik başlatma kaydının adı: sistemde saklandığı için dile göre değişmez.
+const APP_ID: &str = "Net Manager";
 /// Tek çalışma kilidi: port açık kalırsa ikinci kopya başlayamaz.
 const LOCK_ADDR: &str = "127.0.0.1:47823";
 
 enum UserEvent {
     Menu(MenuEvent),
-    /// Pencerelerden gelen seçim: "range:30d", "opt.lang:tr" gibi
+    /// Pencerelerden gelen seçim: "range:30d", "set.lang:tr" gibi
     Ipc(String),
 }
 
@@ -95,7 +97,7 @@ fn render_chart(db: &Stats, st: &ChartState, ifaces: &[(String, String)]) -> Str
 fn autolaunch() -> Option<auto_launch::AutoLaunch> {
     let exe = std::env::current_exe().ok()?;
     AutoLaunchBuilder::new()
-        .set_app_name("Net Manager")
+        .set_app_name(APP_ID)
         .set_app_path(&exe.to_string_lossy())
         .build()
         .ok()
@@ -104,12 +106,12 @@ fn autolaunch() -> Option<auto_launch::AutoLaunch> {
 fn main() {
     // Zaten çalışan bir kopya varsa sessizce çık.
     let Ok(_lock) = TcpListener::bind(LOCK_ADDR) else {
-        eprintln!("Net Manager is already running.");
+        eprintln!("{}", t("app.already_running"));
         return;
     };
 
     let mut cfg = Config::load();
-    i18n::set_lang(cfg.lang.as_deref());
+    i18n::set_lang(&cfg.lang);
 
     let mut networks = Networks::new_with_refreshed_list();
     let iface_list = ifaces::list(&networks);
@@ -136,13 +138,9 @@ fn main() {
     let menu = Menu::new();
 
     let stats_menu = Submenu::new(t("menu.stats"), true);
-    let today_item = MenuItem::new(format!("{}: {}", t("stats.today"), t("stats.empty")), false, None);
-    let month_item = MenuItem::new(format!("{}: {}", t("stats.month"), t("stats.empty")), false, None);
-    let peak_item = MenuItem::new(
-        format!("{}: {}", t("stats.peak_today"), t("stats.empty")),
-        false,
-        None,
-    );
+    let today_item = MenuItem::new(t1("stats.line_empty", &t("stats.today")), false, None);
+    let month_item = MenuItem::new(t1("stats.line_empty", &t("stats.month")), false, None);
+    let peak_item = MenuItem::new(t1("stats.line_empty", &t("stats.peak_today")), false, None);
     let chart_item = MenuItem::new(t("stats.chart"), true, None);
     stats_menu.append(&today_item).unwrap();
     stats_menu.append(&month_item).unwrap();
@@ -151,11 +149,11 @@ fn main() {
     stats_menu.append(&PredefinedMenuItem::separator()).unwrap();
     stats_menu.append(&chart_item).unwrap();
 
-    let options_item = MenuItem::new(t("menu.options"), true, None);
+    let settings_item = MenuItem::new(t("menu.settings"), true, None);
     let quit_item = MenuItem::new(t("menu.quit"), true, None);
 
     menu.append(&stats_menu).unwrap();
-    menu.append(&options_item).unwrap();
+    menu.append(&settings_item).unwrap();
     menu.append(&PredefinedMenuItem::separator()).unwrap();
     menu.append(&quit_item).unwrap();
 
@@ -207,13 +205,22 @@ fn main() {
             Event::NewEvents(StartCause::Init) => {
                 let builder = TrayIconBuilder::new()
                     .with_menu(Box::new(menu.clone()))
-                    .with_title("↓ 0 KB/s  ↑ 0 KB/s")
+                    .with_title(tn(
+                        "tray.rate",
+                        &[
+                            &units::fmt_rate(0.0, cfg.unit_mode, cfg.min_unit, cfg.max_unit),
+                            &units::fmt_rate(0.0, cfg.unit_mode, cfg.min_unit, cfg.max_unit),
+                        ],
+                    ))
                     .with_tooltip(t("app.name"));
                 // macOS menü çubuğunda yalnızca metin: ikon yer kaplamasın.
                 #[cfg(not(target_os = "macos"))]
                 let builder = builder.with_icon(icon::build());
 
-                tray = Some(builder.build().expect("tray icon could not be created"));
+                match builder.build() {
+                    Ok(t) => tray = Some(t),
+                    Err(e) => eprintln!("{}", t1("error.tray", &e.to_string())),
+                }
             }
 
             Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
@@ -259,8 +266,13 @@ fn main() {
                     }
                 }
 
-                let title = format!("↓ {}  ↑ {}", units::fmt_rate(down as f64, cfg.unit_mode, cfg.min_unit, cfg.max_unit),
-                    units::fmt_rate(up as f64, cfg.unit_mode, cfg.min_unit, cfg.max_unit));
+                let title = tn(
+                    "tray.rate",
+                    &[
+                        &units::fmt_rate(down as f64, cfg.unit_mode, cfg.min_unit, cfg.max_unit),
+                        &units::fmt_rate(up as f64, cfg.unit_mode, cfg.min_unit, cfg.max_unit),
+                    ],
+                );
                 if let Some(t) = &tray {
                     t.set_title(Some(&title));
                     let _ = t.set_tooltip(Some(&title));
@@ -280,23 +292,20 @@ fn main() {
                 if let Some(db) = &db {
                     let sel = cfg.iface.as_deref();
                     let (d, m, p) = (db.today(sel), db.month(sel), db.peak_today(sel));
-                    today_item.set_text(format!(
-                        "{}:  ↓ {}   ↑ {}",
-                        t("stats.today"),
-                        stats::fmt_bytes(d.0),
-                        stats::fmt_bytes(d.1)
+                    let rate = |v: u64| {
+                        units::fmt_rate(v as f64, cfg.unit_mode, cfg.min_unit, cfg.max_unit)
+                    };
+                    today_item.set_text(tn(
+                        "stats.line",
+                        &[&t("stats.today"), &stats::fmt_bytes(d.0), &stats::fmt_bytes(d.1)],
                     ));
-                    month_item.set_text(format!(
-                        "{}:  ↓ {}   ↑ {}",
-                        t("stats.month"),
-                        stats::fmt_bytes(m.0),
-                        stats::fmt_bytes(m.1)
+                    month_item.set_text(tn(
+                        "stats.line",
+                        &[&t("stats.month"), &stats::fmt_bytes(m.0), &stats::fmt_bytes(m.1)],
                     ));
-                    peak_item.set_text(format!(
-                        "{}:  ↓ {}   ↑ {}",
-                        t("stats.peak_today"),
-                        units::fmt_rate(p.0 as f64, cfg.unit_mode, cfg.min_unit, cfg.max_unit),
-                        units::fmt_rate(p.1 as f64, cfg.unit_mode, cfg.min_unit, cfg.max_unit)
+                    peak_item.set_text(tn(
+                        "stats.line",
+                        &[&t("stats.peak_today"), &rate(p.0), &rate(p.1)],
                     ));
                 }
             }
@@ -329,24 +338,24 @@ fn main() {
                                     #[cfg(target_os = "macos")]
                                     sync_policy(&chart, &opts);
                                 }
-                                Err(e) => eprintln!("webview error: {e}"),
+                                Err(e) => eprintln!("{}", t1("error.webview", &e.to_string())),
                             }
                         }
                     }
                     return;
                 }
 
-                if ev.id == *options_item.id() {
+                if ev.id == *settings_item.id() {
                     if let Some(o) = &opts {
                         o.window.set_focus();
                     } else if let Ok(w) = WindowBuilder::new()
-                        .with_title(t("window.options"))
+                        .with_title(t("window.settings"))
                         .with_inner_size(tao::dpi::LogicalSize::new(520.0, 340.0))
                         .build(target)
                     {
                         let p = ipc_proxy.clone();
                         match WebViewBuilder::new()
-                            .with_html(options::html(&cfg, &iface_choices))
+                            .with_html(settings::html(&cfg, &iface_choices))
                             .with_ipc_handler(move |req| {
                                 let _ = p.send_event(UserEvent::Ipc(req.body().clone()));
                             })
@@ -358,7 +367,7 @@ fn main() {
                                 #[cfg(target_os = "macos")]
                                 sync_policy(&chart, &opts);
                             }
-                            Err(e) => eprintln!("webview error: {e}"),
+                            Err(e) => eprintln!("{}", t1("error.webview", &e.to_string())),
                         }
                     }
                     return;
@@ -374,17 +383,16 @@ fn main() {
                     return;
                 };
 
-                // --- Seçenekler penceresi ---
-                if let Some(field) = kind.strip_prefix("opt.") {
+                // --- Ayarlar penceresi ---
+                if let Some(field) = kind.strip_prefix("set.") {
                     let mut relabel = false;
                     match field {
                         "lang" => {
-                            cfg.lang = if key == "system" {
-                                None
-                            } else {
-                                Some(key.to_string())
-                            };
-                            i18n::set_lang(cfg.lang.as_deref());
+                            if !i18n::is_known(key) {
+                                return;
+                            }
+                            cfg.lang = key.to_string();
+                            i18n::set_lang(&cfg.lang);
                             relabel = true;
                         }
                         "iface" => {
@@ -428,19 +436,19 @@ fn main() {
                     if relabel {
                         stats_menu.set_text(t("menu.stats"));
                         chart_item.set_text(t("stats.chart"));
-                        options_item.set_text(t("menu.options"));
+                        settings_item.set_text(t("menu.settings"));
                         quit_item.set_text(t("menu.quit"));
                         if let Some(c) = &chart {
                             c.window.set_title(&t("window.chart"));
                         }
                         if let Some(o) = &opts {
-                            o.window.set_title(&t("window.options"));
+                            o.window.set_title(&t("window.settings"));
                         }
                     }
 
                     // Seçim listeleri ve etiketler ayarla birlikte değişir: yeniden çiz.
                     if let Some(o) = &opts {
-                        let _ = o.webview.load_html(&options::html(&cfg, &iface_choices));
+                        let _ = o.webview.load_html(&settings::html(&cfg, &iface_choices));
                     }
                     if let (Some(c), Some(db)) = (&chart, &db) {
                         let _ = c.webview.load_html(&render_chart(db, &chart_state, &iface_choices));

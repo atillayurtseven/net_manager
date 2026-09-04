@@ -15,13 +15,14 @@ pub struct Config {
     /// Bayt (KB/s) mi bit (Mbps) mi
     #[serde(default)]
     pub unit_mode: Mode,
-    /// Arayüz dili; None = işletim sisteminin dilini izle
-    #[serde(default)]
-    pub lang: Option<String>,
+    /// Arayüz dili kodu; tanınmıyorsa varsayılana düşer
+    #[serde(default = "default_lang")]
+    pub lang: String,
 }
 
 fn default_min() -> Unit { Unit::KB }
 fn default_max() -> Unit { Unit::GB }
+fn default_lang() -> String { crate::i18n::DEFAULT.to_string() }
 
 impl Default for Config {
     fn default() -> Self {
@@ -31,7 +32,7 @@ impl Default for Config {
             min_unit: default_min(),
             max_unit: default_max(),
             unit_mode: Mode::default(),
-            lang: None,
+            lang: default_lang(),
         }
     }
 }

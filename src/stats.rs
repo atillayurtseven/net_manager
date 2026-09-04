@@ -1,6 +1,6 @@
 //! SQLite tabanlı trafik istatistikleri: dakikalık geçmiş + günlük zirve hızlar.
 
-use crate::i18n::{t, t1};
+use crate::i18n::t;
 use chrono::{DateTime, Datelike, Duration, Local, TimeZone, Timelike};
 use std::collections::HashMap;
 use rusqlite::{params, Connection};
@@ -22,13 +22,13 @@ fn db_path() -> PathBuf {
 pub fn fmt_bytes(b: u64) -> String {
     let kb = b as f64 / 1024.0;
     if kb < 1024.0 {
-        format!("{kb:.0} KB")
+        format!("{kb:.0} {}", t("unit.kb"))
     } else if kb < 1024.0 * 1024.0 {
-        format!("{:.1} MB", kb / 1024.0)
+        format!("{:.1} {}", kb / 1024.0, t("unit.mb"))
     } else if kb < 1024.0 * 1024.0 * 1024.0 {
-        format!("{:.2} GB", kb / (1024.0 * 1024.0))
+        format!("{:.2} {}", kb / (1024.0 * 1024.0), t("unit.gb"))
     } else {
-        format!("{:.2} TB", kb / (1024.0 * 1024.0 * 1024.0))
+        format!("{:.2} {}", kb / (1024.0 * 1024.0 * 1024.0), t("unit.tb"))
     }
 }
 
@@ -215,24 +215,14 @@ impl Bucket {
         }
     }
 
-    /// Eksende gösterilecek kısa etiket.
+    /// Eksende gösterilecek kısa etiket. Biçim dile göre değişir.
     fn label(self, d: DateTime<Local>) -> String {
-        match self {
-            Bucket::Hour => d.format("%H").to_string(),
-            Bucket::Day => d.format("%d.%m").to_string(),
-            Bucket::Week => d.format("%d.%m").to_string(),
-            Bucket::Month => d.format("%m.%y").to_string(),
-        }
+        d.format(&t(&format!("format.{}", self.key()))).to_string()
     }
 
     /// Tooltip için uzun etiket.
     fn long_label(self, d: DateTime<Local>) -> String {
-        match self {
-            Bucket::Hour => d.format("%d.%m %H:00").to_string(),
-            Bucket::Day => d.format("%d.%m.%Y").to_string(),
-            Bucket::Week => t1("chart.week_of", &d.format("%d.%m.%Y").to_string()),
-            Bucket::Month => d.format("%m.%Y").to_string(),
-        }
+        d.format(&t(&format!("format.{}_long", self.key()))).to_string()
     }
 }
 

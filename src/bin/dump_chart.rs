@@ -7,8 +7,8 @@ mod chart;
 mod stats;
 
 fn main() {
-    // İsteğe bağlı 2. argüman: dil kodu ("tr"), yoksa sistem dili.
-    i18n::set_lang(std::env::args().nth(2).as_deref());
+    // İsteğe bağlı 2. argüman: dil kodu ("tr"), yoksa varsayılan dil.
+    i18n::set_lang(&std::env::args().nth(2).unwrap_or_else(|| i18n::DEFAULT.to_string()));
     let db = stats::Stats::open().expect("db açılamadı");
     let (range, bucket) = (stats::Range::Last24h, stats::Bucket::Hour);
     let data = db.series(range, bucket, None);
