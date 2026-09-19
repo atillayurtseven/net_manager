@@ -189,9 +189,28 @@ fn render_chart(db: &Stats, st: &ChartState, ifaces: &[(String, String)]) -> Str
 
 fn autolaunch() -> Option<auto_launch::AutoLaunch> {
     let exe = std::env::current_exe().ok()?;
+
+    // macOS login item'i .app paketini istiyor; Contents/MacOS/<exe> yolu
+    // açılışta başlatılmıyor. Paket köküne çıkıp onu kaydediyoruz.
+    #[cfg(target_os = "macos")]
+    let path = exe
+        .ancestors()
+        .find(|p| p.extension().is_some_and(|e| e == "app"))
+        .unwrap_or(&exe)
+        .to_path_buf();
+    #[cfg(not(target_os = "macos"))]
+    let path = exe;
+
+    // Login item adı yolun dosya adından türüyor; is_enabled() aynı adı
+    // arasın diye app_name'i de oradan alıyoruz.
+    let name = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| APP_ID.to_string());
+
     AutoLaunchBuilder::new()
-        .set_app_name(APP_ID)
-        .set_app_path(&exe.to_string_lossy())
+        .set_app_name(&name)
+        .set_app_path(&path.to_string_lossy())
         .build()
         .ok()
 }
