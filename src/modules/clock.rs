@@ -1,12 +1,13 @@
 //! Saat: yerel zaman, dünya saatleri ve ay evresi.
 
-use super::{fit, Module, Readout};
+use super::{Module, Readout};
 use crate::config::Config;
 use crate::i18n::{t, tn};
 use chrono::{Local, Utc};
 use chrono_tz::Tz;
 
-const ROWS: usize = 5;
+/// Menüyü şişirmemek için gösterilecek en fazla dünya saati.
+const MAX_ZONES: usize = 6;
 
 #[derive(Default)]
 pub struct Clock;
@@ -37,9 +38,6 @@ impl Module for Clock {
         "clock"
     }
 
-    fn rows(&self) -> usize {
-        ROWS
-    }
 
     fn read(&mut self, cfg: &Config) -> Readout {
         let now = Local::now();
@@ -59,11 +57,11 @@ impl Module for Clock {
                     let label = name.rsplit('/').next().unwrap_or(name).replace('_', " ");
                     Some(format!("{label}  {}", there.format(&time_fmt)))
                 })
-                .take(ROWS - 2),
+                .take(MAX_ZONES),
         );
 
         rows.push(tn("clock.moon", &[&t(moon_phase())]));
 
-        Readout::new(now.format(&time_fmt).to_string(), fit(rows, ROWS))
+        Readout::new(now.format(&time_fmt).to_string(), rows)
     }
 }

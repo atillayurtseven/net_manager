@@ -1,8 +1,8 @@
 //! Menü çubuğu modülleri.
 //!
 //! Her modül kendi menü çubuğu öğesini alır: solda kısa bir gösterge metni,
-//! tıklanınca sabit sayıda bilgi satırı. Satır sayısı sabittir çünkü menü
-//! öğeleri bir kez kurulup sonra yalnızca metinleri güncellenir.
+//! tıklanınca okunabilen veriler. Satır sayısı turdan tura değişebilir;
+//! menü buna göre kısalıp uzar, okunamayan veri için boş satır bırakılmaz.
 
 pub mod battery;
 pub mod clock;
@@ -17,7 +17,7 @@ use crate::config::Config;
 pub struct Readout {
     /// Menü çubuğunda görünen kısa metin.
     pub title: String,
-    /// Açılır menüdeki bilgi satırları; uzunluğu her zaman `rows()` kadar.
+    /// Açılır menüdeki bilgi satırları; yalnızca okunabilenler.
     pub rows: Vec<String>,
     /// Eşik uyarısına konu olan doluluk yüzdesi (varsa).
     pub level: Option<f64>,
@@ -61,9 +61,6 @@ pub trait Module {
     /// Ayarlarda ve yapılandırmada kullanılan sabit kimlik ("cpu", "disk"…).
     fn id(&self) -> &'static str;
 
-    /// Açılır menüdeki bilgi satırı sayısı. Kurulumdan sonra değişmez.
-    fn rows(&self) -> usize;
-
     /// Veriyi tazeler ve gösterilecek metinleri üretir.
     fn read(&mut self, cfg: &Config) -> Readout;
 
@@ -73,16 +70,8 @@ pub trait Module {
     }
 }
 
-/// Eksik veri yerine kullanılan yer tutucu.
+/// Tek bir alan okunamadığında değerinin yerine yazılan işaret.
+/// Satırın tamamı boşsa satır hiç eklenmez, bu yalnızca alan içindir.
 pub fn dash() -> String {
     "—".to_string()
-}
-
-/// `rows` uzunluğunu sabitler: eksikse yer tutucuyla doldurur, fazlasını atar.
-pub fn fit(mut rows: Vec<String>, n: usize) -> Vec<String> {
-    rows.truncate(n);
-    while rows.len() < n {
-        rows.push(dash());
-    }
-    rows
 }

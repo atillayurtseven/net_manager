@@ -5,12 +5,13 @@
 //! kullanılmıyor. Okunabilen ne varsa gösterilir: `sysinfo`'nun bileşen
 //! listesi ve batarya sıcaklığı (ioreg, sudo istemez).
 
-use super::{fit, Module, Readout};
+use super::{Module, Readout};
 use crate::config::Config;
 use crate::i18n::{t, tn};
 use sysinfo::Components;
 
-const ROWS: usize = 5;
+/// Bir makinede onlarca sensör olabiliyor; en fazla bu kadarı listelenir.
+const MAX_SENSORS: usize = 5;
 /// Bağlı olmayan sensörler uçuk değerler döndürür (-9200 °C gibi); makul
 /// aralık dışındaki okumalar atılır.
 const SANE: std::ops::Range<f32> = -40.0..150.0;
@@ -61,9 +62,6 @@ impl Module for Sensors {
         "sensors"
     }
 
-    fn rows(&self) -> usize {
-        ROWS
-    }
 
     fn period(&self) -> u32 {
         PERIOD
@@ -78,7 +76,7 @@ impl Module for Sensors {
             .iter()
             .filter(|c| SANE.contains(&c.temperature()))
             .map(|c| tn("sensors.component", &[c.label(), &celsius(c.temperature())]))
-            .take(ROWS - 1)
+            .take(MAX_SENSORS)
             .collect();
 
         let batt = battery_temp();
@@ -106,6 +104,6 @@ impl Module for Sensors {
                 celsius(hottest)
             } else {
                 t("module.sensors")
-            }, fit(rows, ROWS))
+            }, rows)
     }
 }

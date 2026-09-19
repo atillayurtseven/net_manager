@@ -4,11 +4,10 @@
 //! Bluetooth pilleri `system_profiler` ile okunur; o çağrı görece pahalı
 //! olduğu için seyrek yapılır.
 
-use super::{dash, fit, Module, Readout};
+use super::{dash, Module, Readout};
 use crate::config::Config;
 use crate::i18n::{t, tn};
 
-const ROWS: usize = 6;
 /// Batarya yavaş değişir; her saniye yoklamanın anlamı yok.
 const PERIOD: u32 = 10;
 /// Bluetooth taraması en pahalı adım: birkaç dakikada bir yeter.
@@ -95,9 +94,6 @@ impl Module for Battery {
         "battery"
     }
 
-    fn rows(&self) -> usize {
-        ROWS
-    }
 
     fn period(&self) -> u32 {
         PERIOD
@@ -105,7 +101,7 @@ impl Module for Battery {
 
     fn read(&mut self, _cfg: &Config) -> Readout {
         let Some(text) = read_ioreg() else {
-            return Readout::new(t("module.battery"), fit(Vec::new(), ROWS));
+            return Readout::new(t("module.battery"), Vec::new());
         };
 
         let level = num(&text, "CurrentCapacity").unwrap_or(0);
@@ -163,6 +159,6 @@ impl Module for Battery {
                 .map(|(name, lvl)| tn("battery.device", &[name, lvl])),
         );
 
-        Readout::new(format!("{level}%"), fit(rows, ROWS))
+        Readout::new(format!("{level}%"), rows)
     }
 }

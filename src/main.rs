@@ -29,7 +29,7 @@ use tao::window::{Window, WindowBuilder};
 use wry::{WebView, WebViewBuilder};
 #[cfg(target_os = "macos")]
 use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS, EventLoopWindowTargetExtMacOS};
-use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
+use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem};
 use tray_icon::{TrayIcon, TrayIconBuilder};
 
 const TICK: Duration = Duration::from_secs(1);
@@ -64,12 +64,35 @@ impl Default for ChartState {
 }
 
 /// Menü çubuğundaki bir modül: kendi öğesi, kendi açılır menüsü.
-/// Bilgi satırları kurulumda oluşturulur, sonra yalnızca metinleri güncellenir.
+/// Bilgi satırları okunan veri kadardır; sayıları değişince menü kısalır uzar.
 struct ModuleTray {
     module: Box<dyn Module>,
     tray: TrayIcon,
+    menu: Menu,
     rows: Vec<MenuItem>,
     ticks: u32,
+}
+
+impl ModuleTray {
+    /// Menüdeki bilgi satırlarını verilen metinlerle eşitler.
+    /// Satırlar menünün başında durur, ayraç ve komutlar altta kalır.
+    fn set_rows(&mut self, texts: &[String]) {
+        while self.rows.len() > texts.len() {
+            if let Some(item) = self.rows.pop() {
+                let _ = self.menu.remove(&item);
+            }
+        }
+        while self.rows.len() < texts.len() {
+            let item = MenuItem::new("", false, None);
+            if self.menu.insert(&item, self.rows.len()).is_err() {
+                break;
+            }
+            self.rows.push(item);
+        }
+        for (item, text) in self.rows.iter().zip(texts) {
+            item.set_text(text);
+        }
+    }
 }
 
 /// Her modülün menüsünde Ayarlar ve Çıkış kendi kopyasıyla bulunur;
@@ -91,12 +114,7 @@ impl CommonIds {
 /// Modül için menü çubuğu öğesi kurar; başarısız olursa modül atlanır.
 fn build_module_tray(module: Box<dyn Module>, ids: &mut CommonIds) -> Option<ModuleTray> {
     let menu = Menu::new();
-    let rows: Vec<MenuItem> = (0..module.rows())
-        .map(|_| MenuItem::new(modules::dash(), false, None))
-        .collect();
-    for r in &rows {
-        menu.append(r).ok()?;
-    }
+    // Satırlar ilk okumada eklenir; menü boş kurulur.
     menu.append(&PredefinedMenuItem::separator()).ok()?;
 
     let settings = MenuItem::new(t("menu.settings"), true, None);
@@ -107,13 +125,13 @@ fn build_module_tray(module: Box<dyn Module>, ids: &mut CommonIds) -> Option<Mod
     ids.quit.push(quit.id().clone());
 
     let tray = TrayIconBuilder::new()
-        .with_menu(Box::new(menu))
+        .with_menu(Box::new(menu.clone()))
         .with_title(t(&format!("module.{}", module.id())))
         .with_tooltip(t(&format!("module.{}", module.id())))
         .build()
         .ok()?;
 
-    Some(ModuleTray { module, tray, rows, ticks: 0 })
+    Some(ModuleTray { module, tray, menu, rows: Vec::new(), ticks: 0 })
 }
 
 /// Modül öğelerini ayarlara göre baştan kurar.
@@ -209,27 +227,24 @@ fn main() {
     }
     let db = Stats::open().ok();
 
-    // --- Menü: yalnızca İstatistikler ve Seçenekler (artı Çıkış) ---
+    // --- Ağ menüsü ---
+    // Diğer modüllerle aynı düzen: bilgi satırları üstte, eylemler altta.
+    // İstatistikler alt menüye saklanmıyor, doğrudan görünüyor.
     let menu = Menu::new();
 
-    let stats_menu = Submenu::new(t("menu.stats"), true);
     let today_item = MenuItem::new(t1("stats.line_empty", &t("stats.today")), false, None);
     let month_item = MenuItem::new(t1("stats.line_empty", &t("stats.month")), false, None);
     let peak_item = MenuItem::new(t1("stats.line_empty", &t("stats.peak_today")), false, None);
     let chart_item = MenuItem::new(t("stats.chart"), true, None);
-    stats_menu.append(&today_item).unwrap();
-    stats_menu.append(&month_item).unwrap();
-    stats_menu.append(&PredefinedMenuItem::separator()).unwrap();
-    stats_menu.append(&peak_item).unwrap();
-    stats_menu.append(&PredefinedMenuItem::separator()).unwrap();
-    stats_menu.append(&chart_item).unwrap();
-
     let settings_item = MenuItem::new(t("menu.settings"), true, None);
     let quit_item = MenuItem::new(t("menu.quit"), true, None);
 
-    menu.append(&stats_menu).unwrap();
-    menu.append(&settings_item).unwrap();
+    menu.append(&today_item).unwrap();
+    menu.append(&month_item).unwrap();
+    menu.append(&peak_item).unwrap();
     menu.append(&PredefinedMenuItem::separator()).unwrap();
+    menu.append(&chart_item).unwrap();
+    menu.append(&settings_item).unwrap();
     menu.append(&quit_item).unwrap();
 
     // --- Event loop ---
@@ -382,9 +397,7 @@ fn main() {
                     }
                     let out = mt.module.read(&cfg);
                     let _ = mt.tray.set_title(Some(&out.title));
-                    for (item, text) in mt.rows.iter().zip(out.rows.iter()) {
-                        item.set_text(text);
-                    }
+                    mt.set_rows(&out.rows);
                     if let Some(level) = out.level {
                         let (threshold, key) = match mt.module.id() {
                             "cpu" => (cfg.alert_cpu, "alert.cpu"),
@@ -580,7 +593,6 @@ fn main() {
 
                     // Dil değiştiyse menü etiketlerini yenile.
                     if relabel {
-                        stats_menu.set_text(t("menu.stats"));
                         chart_item.set_text(t("stats.chart"));
                         settings_item.set_text(t("menu.settings"));
                         quit_item.set_text(t("menu.quit"));

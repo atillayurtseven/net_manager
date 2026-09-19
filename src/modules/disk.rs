@@ -3,13 +3,14 @@
 //! macOS'ta sistem geneli disk I/O sayacı için taşınabilir bir API yok; hız,
 //! süreçlerin okuma/yazma toplamlarının iki tur arasındaki farkından çıkarılır.
 
-use super::{fit, Module, Readout};
+use super::{Module, Readout};
 use crate::config::Config;
 use crate::i18n::{t, tn};
 use crate::stats::fmt_bytes;
 use sysinfo::{Disks, ProcessRefreshKind, RefreshKind, System};
 
-const ROWS: usize = 5;
+/// Menüyü şişirmemek için listelenecek en fazla birim.
+const MAX_VOLUMES: usize = 5;
 
 pub struct Disk {
     disks: Disks,
@@ -35,9 +36,6 @@ impl Module for Disk {
         "disk"
     }
 
-    fn rows(&self) -> usize {
-        ROWS
-    }
 
     fn read(&mut self, _cfg: &Config) -> Readout {
         self.disks.refresh();
@@ -91,7 +89,7 @@ impl Module for Disk {
                 &[&d.name().to_string_lossy(), &fmt_bytes(avail), &fmt_bytes(total)],
             ));
             seen.push(mount);
-            if rows.len() >= ROWS - 1 {
+            if rows.len() >= MAX_VOLUMES {
                 break;
             }
         }
@@ -101,7 +99,7 @@ impl Module for Disk {
             &[&fmt_bytes(rate.0), &fmt_bytes(rate.1)],
         ));
 
-        Readout::new(format!("{} {worst:.0}%", t("module.disk")), fit(rows, ROWS))
+        Readout::new(format!("{} {worst:.0}%", t("module.disk")), rows)
             .with_level(worst, Some(worst_name))
     }
 }

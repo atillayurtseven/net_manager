@@ -1,12 +1,11 @@
 //! Bellek ve takas kullanımı.
 
-use super::{fit, Module, Readout};
+use super::{Module, Readout};
 use crate::config::Config;
 use crate::i18n::{t, tn};
 use crate::stats::fmt_bytes;
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
 
-const ROWS: usize = 6;
 
 pub struct Memory {
     sys: System,
@@ -29,9 +28,6 @@ impl Module for Memory {
         "memory"
     }
 
-    fn rows(&self) -> usize {
-        ROWS
-    }
 
     fn read(&mut self, _cfg: &Config) -> Readout {
         self.sys.refresh_memory();
@@ -69,7 +65,7 @@ impl Module for Memory {
                 .map(|(name, m)| tn("mem.top", &[&format!("{name}  {}", fmt_bytes(m))])),
         );
 
-        Readout::new(format!("{} {pct:.0}%", t("module.memory")), fit(rows, ROWS))
+        Readout::new(format!("{} {pct:.0}%", t("module.memory")), rows)
             .with_level(pct, None)
     }
 }

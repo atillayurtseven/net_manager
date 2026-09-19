@@ -3,12 +3,11 @@
 //! GPU tarafı macOS'ta `ioreg`'in IOAccelerator düğümünden okunur; bu düğüm
 //! sudo istemez, `powermetrics`'in aksine. Diğer platformlarda GPU satırı boş kalır.
 
-use super::{fit, Module, Readout};
+use super::{Module, Readout};
 use crate::config::Config;
 use crate::i18n::{t, tn};
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
-const ROWS: usize = 6;
 /// GPU yoklaması CPU'dan pahalı: her turda değil, birkaç saniyede bir.
 const GPU_EVERY: u32 = 3;
 
@@ -63,9 +62,6 @@ impl Module for Cpu {
         "cpu"
     }
 
-    fn rows(&self) -> usize {
-        ROWS
-    }
 
     fn read(&mut self, _cfg: &Config) -> Readout {
         self.sys.refresh_cpu_all();
@@ -119,7 +115,7 @@ impl Module for Cpu {
                 .map(|(name, u)| tn("cpu.top", &[&format!("{name}  {}", pct(u))])),
         );
 
-        Readout::new(format!("{} {}", t("module.cpu"), pct(usage)), fit(rows, ROWS))
+        Readout::new(format!("{} {}", t("module.cpu"), pct(usage)), rows)
             .with_level(usage as f64, None)
     }
 }
